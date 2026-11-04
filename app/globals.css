@@ -1,0 +1,57 @@
+@tailwind base; @tailwind components; @tailwind utilities;
+:root { --ink:#1D2B36; --steel:#3C515E; --mist:#708693; --fog:#B7C4CC; --gold:#D9A15F; --paper:#F8FAFC; }
+/* Theme colours as r g b triplets. The page uses these; dark mode swaps them. */
+:root { --c-paper: 248 250 252; --c-ink: 29 43 54; --c-muted: 60 81 94; --c-faint: 112 134 147; --c-line: 183 196 204; --c-danger: 185 28 28; --c-ok: 21 128 61; --c-warn: 180 83 9; color-scheme: light; }
+.dark { --c-paper: 16 24 30; --c-ink: 232 238 242; --c-muted: 183 196 204; --c-faint: 141 160 171; --c-line: 48 66 78; --c-danger: 248 113 113; --c-ok: 74 222 128; --c-warn: 251 191 36; color-scheme: dark; }
+/* Bands that stay dark in both modes keep the light-mode values inside them. */
+.surface-dark, .dark-page { --c-paper: 248 250 252; --c-ink: 29 43 54; --c-muted: 60 81 94; --c-faint: 112 134 147; --c-line: 183 196 204; --c-danger: 248 113 113; --c-ok: 74 222 128; --c-warn: 251 191 36; color-scheme: dark; }
+html { background: rgb(var(--c-paper)); color: rgb(var(--c-ink)); }
+body { font-family: "Helvetica Neue", Inter, Arial, sans-serif; -webkit-font-smoothing: antialiased; }
+.mask { overflow: hidden; display: block; }
+.mask > span { display: block; will-change: transform; }
+.brut { font-weight: 900; text-transform: uppercase; line-height: .85; letter-spacing: -.05em; }
+.hairline { border: 1px solid rgb(var(--c-ink)); }
+:focus-visible { outline: 3px solid var(--gold); outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+
+/* Dark pages: full-bleed over the thread margin */
+.dark-page { background: var(--ink); color: var(--paper); min-height: 100vh; margin-left: -2.5rem; padding-left: 2.5rem; }
+@media (min-width: 768px) { .dark-page { margin-left: -4rem; padding-left: 4rem; } }
+.chapter-title { font-weight: 900; letter-spacing: -.04em; line-height: .95; font-size: clamp(2.4rem, 6vw, 5.5rem); }
+
+/* Rendered post content (markdown) */
+.md { line-height: 1.75; overflow-wrap: anywhere; }
+.md > * + * { margin-top: 1.25em; }
+.md h1, .md h2 { font-weight: 900; letter-spacing: -.03em; line-height: 1.05; font-size: 2rem; margin-top: 2em; }
+.md h3 { font-weight: 800; font-size: 1.4rem; margin-top: 1.6em; }
+.md a { color: var(--gold); text-decoration: underline; text-underline-offset: 3px; }
+.md ul { list-style: disc; padding-left: 1.4em; }
+.md ol { list-style: decimal; padding-left: 1.4em; }
+.md blockquote { border-left: 3px solid var(--gold); padding-left: 1em; font-style: italic; }
+.md img { max-width: 100%; height: auto; }
+.md code { font-family: ui-monospace, monospace; font-size: .9em; background: rgba(127,127,127,.2); padding: .1em .3em; }
+.md pre { overflow-x: auto; background: rgba(127,127,127,.15); padding: 1em; }
+.md pre code { background: none; padding: 0; }
+.md hr { border-color: currentColor; opacity: .3; }
+.md table { border-collapse: collapse; display: block; overflow-x: auto; }
+.md th, .md td { border: 1px solid rgba(127,127,127,.4); padding: .4em .7em; }
+
+/* Full-bleed bands over the thread margin */
+.bleed { margin-left: -2.5rem; padding-left: 2.5rem; }
+@media (min-width: 768px) { .bleed { margin-left: -4rem; padding-left: 4rem; } }
+
+/* Long-form reading (light pages) */
+.reading { font-family: Georgia, Cambria, "Times New Roman", serif; font-size: 1.25rem; line-height: 1.75; color: rgb(var(--c-ink)); }
+.reading .md a { color: rgb(var(--c-ink)); text-decoration-color: var(--gold); text-decoration-thickness: 2px; }
+.reading .md blockquote { border-left-color: rgb(var(--c-ink)); }
+.reading .md h2, .reading .md h3 { font-family: "Helvetica Neue", Inter, Arial, sans-serif; }
+
+/* Podcast: details slide in when the episode changes */
+@keyframes swap { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+.swap { animation: swap .7s cubic-bezier(.2,.7,.2,1) both; }
+
+/* Writing editor */
+.ProseMirror p.is-editor-empty:first-child::before { content: attr(data-placeholder); float: left; height: 0; pointer-events: none; color: #708693; }
+.ProseMirror .ProseMirror-selectednode { outline: 3px solid var(--gold); }
+.yt-embed { aspect-ratio: 16 / 9; background: #000; }
+.yt-embed iframe { width: 100%; height: 100%; pointer-events: none; border: 0; }
