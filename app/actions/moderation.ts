@@ -32,26 +32,26 @@ export async function reportContent(_: unknown, fd: FormData) {
 
 export async function setReportStatus(id: string, status: string) {
   if (!["open", "reviewed", "dismissed"].includes(status)) return { error: "Unknown status." };
-  const { error, count } = await createClient().from("reports").update({ status }, { count: "exact" }).eq("id", id); // RLS: staff only
+  const { error, data } = await createClient().from("reports").update({ status }).eq("id", id).select("id"); // RLS: staff only
   if (error) return { error: error.message };
-  if (!count) return { error: "Only editors and admins can change this." };
+  if (!data?.length) return { error: "Only editors and admins can change this." };
   revalidatePath("/admin");
   return { ok: true };
 }
 
 /** Authors can delete their own comments; editors and admins can delete any (enforced by RLS). */
 export async function deleteComment(id: string) {
-  const { error, count } = await createClient().from("comments").delete({ count: "exact" }).eq("id", id);
+  const { error, data } = await createClient().from("comments").delete().eq("id", id).select("id");
   if (error) return { error: error.message };
-  if (!count) return { error: "You cannot delete this comment." };
+  if (!data?.length) return { error: "You cannot delete this comment." };
   revalidatePath("/admin"); revalidatePath("/articles");
   return { ok: true };
 }
 
 export async function unpublishPost(id: string) {
-  const { error, count } = await createClient().from("posts").update({ status: "draft" }, { count: "exact" }).eq("id", id); // RLS: staff only
+  const { error, data } = await createClient().from("posts").update({ status: "draft" }).eq("id", id).select("id"); // RLS: staff only
   if (error) return { error: error.message };
-  if (!count) return { error: "Only editors and admins can unpublish." };
+  if (!data?.length) return { error: "Only editors and admins can unpublish." };
   revalidatePath("/admin"); revalidatePath("/articles"); revalidatePath("/podcast");
   return { ok: true };
 }

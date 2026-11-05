@@ -4,6 +4,7 @@ import { notFound, redirect } from "next/navigation";
 import Avatar from "@/components/Avatar";
 import Markdown from "@/components/Markdown";
 import PostActions from "@/components/PostActions";
+import DeletePostButton from "@/components/DeletePostButton";
 import { createClient, getProfile } from "@/lib/supabase/server";
 import { firstImage, plain, readMinutes } from "@/lib/text";
 
@@ -33,7 +34,17 @@ export default async function ArticlePage({ params }: { params: { id: string } }
   return (
     <article className="max-w-[680px] pb-24 pr-6 pt-32">
       <Link href="/articles" className="text-sm text-slate7 underline">All articles</Link>
-      {post.status !== "published" && <p className="mt-6 border-2 border-slate9 p-3 font-bold">Not published yet. Only you and the editors can see this.</p>}
+      {post.status !== "published" && (
+        <p className="mt-6 flex flex-wrap items-center gap-3 border-2 border-slate9 p-3 font-bold">
+          <span>{post.status === "pending" ? "Under review. Only you and the editors can see this." : "Draft. Only you and the editors can see this."}</span>
+          {user?.id === post.author_id && (
+            <>
+              <Link href={`/edit/${post.id}`} className="underline">Edit</Link>
+              <DeletePostButton id={post.id} redirectTo="/my-posts" />
+            </>
+          )}
+        </p>
+      )}
       <h1 dir="auto" className="mt-6 text-4xl font-black leading-[1.05] tracking-tight md:text-6xl">{post.title}</h1>
       <Link href={`/u/${post.author_id}`} className="mt-8 flex items-center gap-3">
         <Avatar url={post.profiles?.avatar_url} name={post.profiles?.full_name} size={48} />
@@ -51,6 +62,9 @@ export default async function ArticlePage({ params }: { params: { id: string } }
       <div className="mt-8 border-t border-slate3 pt-6">
         <PostActions postId={post.id} likes={Number(stat?.like_count ?? 0)} comments={Number(stat?.comment_count ?? 0)} liked={!!mine} defaultOpen reportable />
       </div>
+      {post.status === "published" && user?.id === post.author_id && (
+        <p className="mt-6"><DeletePostButton id={post.id} redirectTo="/my-posts" warnLive /></p>
+      )}
     </article>
   );
 }

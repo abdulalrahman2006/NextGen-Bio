@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getProfile } from "@/lib/supabase/server";
 import { dismissNotifications } from "@/app/actions/review";
+import DeletePostButton from "@/components/DeletePostButton";
 
 export const revalidate = 0;
 
@@ -17,6 +18,12 @@ export default async function MyPosts({ searchParams }: { searchParams: { submit
     supabase.from("notifications").select("id,kind,message,post_id").eq("user_id", user.id).is("read_at", null).order("created_at", { ascending: false }),
   ]);
   const rows = (posts ?? []) as Row[];
+  const byId = new Map(rows.map((p) => [p.id, p]));
+  const noteHref = (n: { kind: string; post_id: string }) => {
+    const p = byId.get(n.post_id);
+    if (n.kind === "published" || n.kind === "flagged") return p ? (p.post_type === "audio" ? `/podcast?ep=${p.id}` : `/articles/${p.id}`) : `/edit/${n.post_id}`;
+    return `/edit/${n.post_id}`;
+  };
   return (
     <section className="max-w-3xl pb-24 pr-6 pt-28">
       <h1 className="mb-8 text-4xl font-black tracking-tight md:text-6xl">My posts</h1>
@@ -27,7 +34,7 @@ export default async function MyPosts({ searchParams }: { searchParams: { submit
           <h2 className="font-black">New updates</h2>
           <ul className="mt-2 space-y-1">
             {(notes ?? []).map((n) => (
-              <li key={n.id}><Link href={n.kind === "published" ? `/articles/${n.post_id}` : `/edit/${n.post_id}`} className="underline" dir="auto">{n.message}</Link></li>
+              <li key={n.id}><Link href={noteHref(n)} className="underline" dir="auto">{n.message}</Link></li>
             ))}
           </ul>
           <form action={dismissNotifications}><button className="mt-3 text-sm underline">Dismiss</button></form>
@@ -40,11 +47,15 @@ export default async function MyPosts({ searchParams }: { searchParams: { submit
             <div className="flex flex-wrap items-center gap-x-6 gap-y-1">
               <span className="min-w-0 flex-1 text-xl font-black" dir="auto">{p.title}</span>
               <span className={`text-sm ${labelOf(p) === "Needs changes" ? "font-bold text-danger" : "text-slate7"}`}>{p.post_type === "audio" ? "podcast" : p.post_type} · {labelOf(p)}</span>
-              {p.status === "pending" ? <span className="font-bold text-slate7">Under review</span> : <Link href={`/edit/${p.id}`} className="font-bold underline">{p.status === "draft" ? "Continue writing" : "Edit"}</Link>}
+              {p.status !== "published" && <Link href={`/edit/${p.id}`} className="font-bold underline">{p.status === "draft" ? "Continue writing" : "Edit"}</Link>}
               {p.status !== "draft" && <Link href={p.post_type === "audio" ? `/podcast?ep=${p.id}` : `/articles/${p.id}`} className="underline">View</Link>}
+              <DeletePostButton id={p.id} warnLive={p.status === "published"} />
             </div>
             {p.status === "draft" && p.review_note && (
               <p className="mt-2 border-l-4 border-gold pl-3 text-slate7" dir="auto"><b>Editor&apos;s note:</b> {p.review_note}</p>
+            )}
+            {p.status === "published" && p.review_note && (
+              <p className="mt-2 border-l-4 border-gold pl-3 text-slate7" dir="auto"><b>An editor flagged an issue:</b> {p.review_note} <span className="text-sm">(it&apos;s still published)</span></p>
             )}
           </li>
         ))}

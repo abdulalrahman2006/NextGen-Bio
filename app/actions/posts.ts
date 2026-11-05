@@ -68,13 +68,11 @@ export async function savePost(_: unknown, fd: FormData) {
     if (!UUID.test(id)) return { error: "That post could not be saved." };
     const { data: cur } = await supabase.from("posts").select("status").eq("id", id).eq("author_id", user.id).maybeSingle();
     if (!cur) return { error: "That post could not be found." };
-    if (cur.status === "pending") return { error: "This post is under review, so you cannot edit it right now." };
-    // A trusted author (or editor/admin) stays live when they edit; a regular student's edit goes back for review.
-    const next = cur.status === "published" ? (autoPublish ? "published" : "pending") : wanted;
-    const { error } = await supabase.from("posts").update({ ...parsed.data, status: next, ...(next !== "draft" ? { review_note: null } : {}) }).eq("id", id).eq("author_id", user.id);
+    if (cur.status === "published") return { error: "Published posts can't be edited. If something needs fixing, an editor will flag it or unpublish it." };
+    const { error } = await supabase.from("posts").update({ ...parsed.data, status: wanted, ...(wanted !== "draft" ? { review_note: null } : {}) }).eq("id", id).eq("author_id", user.id);
     if (error) return { error: error.message };
     revalidatePath("/articles"); revalidatePath("/podcast"); revalidatePath("/my-posts");
-    redirect(next === "draft" ? `/edit/${id}?saved=1` : next === "published" ? view(parsed.data.post_type, id) : "/my-posts?submitted=1");
+    redirect(wanted === "draft" ? `/edit/${id}?saved=1` : wanted === "published" ? view(parsed.data.post_type, id) : "/my-posts?submitted=1");
   }
   const { data: row, error } = await supabase.from("posts").insert({ author_id: user.id, status: wanted, ...parsed.data }).select("id").single();
   if (error) return { error: error.message };
@@ -92,9 +90,9 @@ export async function autosavePost(fd: FormData): Promise<{ id?: string; error?:
   const id = String(fd.get("post_id") || "");
   if (id) {
     if (!UUID.test(id)) return { error: "That post could not be saved." };
-    const { error, count } = await supabase.from("posts").update({ ...parsed.data }, { count: "exact" }).eq("id", id).eq("author_id", user.id).eq("status", "draft");
+    const { error, data } = await supabase.from("posts").update({ ...parsed.data }).eq("id", id).eq("author_id", user.id).eq("status", "draft").select("id");
     if (error) return { error: error.message };
-    if (!count) return { error: "This post is no longer a draft, so it was not changed." };
+    if (!data?.length) return { error: "This post is no longer a draft, so it was not changed." };
     return { id };
   }
   const { data: row, error } = await supabase.from("posts").insert({ author_id: user.id, status: "draft", ...parsed.data }).select("id").single();
@@ -140,12 +138,12 @@ export async function approvePost(id: string) {
   const { data: prev } = await supabase.from("posts").select("status, author_id, title").eq("id", id).maybeSingle();
   if (!prev) return { error: "That post could not be found." };
   const publishing = prev.status !== "published";
-  const { error, count } = await supabase.from("posts").update({
+  const { error, data } = await supabase.from("posts").update({
     status: "published",
     ...(publishing ? { review_note: null, reviewed_at: new Date().toISOString(), reviewed_by: user.id } : {}),
-  }, { count: "exact" }).eq("id", id); // RLS: staff only
+  }).eq("id", id).select("id"); // RLS: staff only
   if (error) return { error: error.message };
-  if (!count) return { error: "Only editors and admins can publish." };
+  if (!data?.length) return { error: "Only editors and admins can publish." };
   if (publishing && prev.author_id !== user.id) {
     await supabase.from("notifications").insert({ user_id: prev.author_id, kind: "published", post_id: id, message: `Your post “${prev.title}” is now published.`.slice(0, 300) });
   }
@@ -173,9 +171,9 @@ export async function setRole(userId: string, role: string) {
     const { data: owner } = await supabase.from("profiles").select("id").eq("role", "admin").order("created_at", { ascending: true }).limit(1).maybeSingle();
     if (!owner || owner.id !== user.id) return { error: "Only the site owner can add or remove admins." };
   }
-  const { error, count } = await supabase.from("profiles").update({ role }, { count: "exact" }).eq("id", userId); // RLS: admin only
+  const { error, data } = await supabase.from("profiles").update({ role }).eq("id", userId).select("id"); // RLS: admin only
   if (error) return { error: error.message };
-  if (!count) return { error: "Only admins can change roles." };
+  if (!data?.length) return { error: "Only admins can change roles." };
   revalidatePath("/admin");
   return { ok: true };
 }
@@ -188,9 +186,9 @@ export async function setTrusted(userId: string, trusted: boolean) {
   const { data: target } = await supabase.from("profiles").select("role").eq("id", userId).maybeSingle();
   if (!target) return { error: "That user could not be found." };
   if (target.role !== "student") return { error: "Only students can be marked trusted." };
-  const { error, count } = await supabase.from("profiles").update({ trusted }).eq("id", userId).eq("role", "student"); // RLS: admin only
+  const { error, data } = await supabase.from("profiles").update({ trusted }).eq("id", userId).eq("role", "student").select("id"); // RLS: admin only
   if (error) return { error: error.message };
-  if (!count) return { error: "Only admins can change this." };
+  if (!data?.length) return { error: "Only admins can change this." };
   revalidatePath("/admin");
   return { ok: true };
 }
@@ -198,9 +196,9 @@ export async function setTrusted(userId: string, trusted: boolean) {
 export async function deletePost(id: string) {
   const supabase = createClient();
   const { data: post } = await supabase.from("posts").select("metadata").eq("id", id).maybeSingle();
-  const { error, count } = await supabase.from("posts").delete({ count: "exact" }).eq("id", id); // RLS: staff only
+  const { error, data } = await supabase.from("posts").delete().eq("id", id).select("id"); // RLS: staff only
   if (error) return { error: error.message };
-  if (!count) return { error: "You do not have permission to delete this post." };
+  if (!data?.length) return { error: "You do not have permission to delete this post." };
   const m = (post?.metadata ?? {}) as Record<string, unknown>;
   const paths = [m.media_url, m.audio_url, m.cover_url]
     .map((u) => String(u ?? "").match(/\/storage\/v1\/object\/public\/audio\/(.+)$/))

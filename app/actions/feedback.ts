@@ -20,17 +20,17 @@ export async function sendFeedback(_: unknown, fd: FormData) {
 
 export async function setFeedbackStatus(id: string, status: string) {
   if (!["new", "reviewed", "resolved"].includes(status)) return { error: "Unknown status." };
-  const { error, count } = await createClient().from("feedback").update({ status }, { count: "exact" }).eq("id", id); // RLS: admins only
+  const { error, data } = await createClient().from("feedback").update({ status }).eq("id", id).select("id"); // RLS: admins only
   if (error) return { error: error.message };
-  if (!count) return { error: "Only admins can change this." };
+  if (!data?.length) return { error: "Only admins can change this." };
   revalidatePath("/admin");
   return { ok: true };
 }
 
 export async function deleteFeedback(id: string) {
-  const { error, count } = await createClient().from("feedback").delete({ count: "exact" }).eq("id", id);
+  const { error, data } = await createClient().from("feedback").delete().eq("id", id).select("id");
   if (error) return { error: error.message };
-  if (!count) return { error: "Only admins can delete feedback." };
+  if (!data?.length) return { error: "Only admins can delete feedback." };
   revalidatePath("/admin");
   return { ok: true };
 }
