@@ -369,7 +369,7 @@ export default function PodcastScene({ episodes, initial = 0 }: { episodes: Epis
   }).slice(0, 2);
 
   return (
-    <div className="surface-dark fixed inset-0 transition-colors duration-700 [&_*]:transition-[color,background-color,border-color,opacity] [&_*]:duration-300"
+    <div className="surface-dark relative h-[calc(100vh-4rem)] overflow-hidden transition-colors duration-700 [&_*]:transition-[color,background-color,border-color,opacity] [&_*]:duration-300"
       style={{ backgroundColor: tone.bg, color: tone.fg, ["--dim" as string]: tone.dim } as React.CSSProperties}>
       {ep.mediaUrl && ep.mediaType !== "video" && (
         <audio key={String(ep.id)} ref={(el) => { media.current = el; }} src={ep.mediaUrl}

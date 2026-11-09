@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { Repeat2 } from "lucide-react";
 import Avatar from "@/components/Avatar";
 import ReportButton from "@/components/ReportButton";
 import FollowButton from "@/components/FollowButton";
@@ -23,12 +24,24 @@ export default async function PublicProfile({ params }: { params: { id: string }
   if (!p) notFound();
   const { data: posts } = await supabase.from("posts").select("id,title,post_type,created_at,tags")
     .eq("author_id", params.id).eq("status", "published").order("created_at", { ascending: false });
-  const [{ count: followers }, { count: following }, { data: myFollow }] = await Promise.all([
+  const [{ count: followers }, { count: following }, { data: myFollow }, { data: reposts }] = await Promise.all([
     supabase.from("follows").select("follower_id", { count: "exact", head: true }).eq("followee_id", params.id),
     supabase.from("follows").select("followee_id", { count: "exact", head: true }).eq("follower_id", params.id),
     user ? supabase.from("follows").select("follower_id").eq("follower_id", user.id).eq("followee_id", params.id).maybeSingle() : Promise.resolve({ data: null }),
+    supabase.from("reposts").select("id,note,created_at,posts!inner(id,title,post_type,status,author_id,profiles(full_name))")
+      .eq("user_id", params.id).eq("posts.status", "published").order("created_at", { ascending: false }),
   ]);
   const me = user?.id === p.id;
+  type FeedItem =
+    | { kind: "post"; created_at: string; id: string; title: string; post_type: string }
+    | { kind: "repost"; created_at: string; note: string | null; original: { id: string; title: string; post_type: string; author_name: string | null } };
+  const feed: FeedItem[] = [
+    ...(posts ?? []).map((x): FeedItem => ({ kind: "post", created_at: x.created_at, id: x.id, title: x.title, post_type: x.post_type })),
+    ...(reposts ?? []).map((r): FeedItem => {
+      const rp = r.posts as unknown as { id: string; title: string; post_type: string; profiles: { full_name: string | null } | null };
+      return { kind: "repost", created_at: r.created_at, note: r.note, original: { id: rp.id, title: rp.title, post_type: rp.post_type, author_name: rp.profiles?.full_name ?? null } };
+    }),
+  ].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
   return (
     <div className="pt-32 pr-6 pb-24">
       <div className="flex flex-wrap items-center gap-6">
@@ -52,16 +65,25 @@ export default async function PublicProfile({ params }: { params: { id: string }
           <Link href="/my-posts" className="underline hover:underline">My posts</Link>
         </p>
       )}
-      <h2 className="mt-16 mb-2 text-2xl font-black">Published ({(posts ?? []).length})</h2>
+      <h2 className="mt-16 mb-2 text-2xl font-black">Activity ({feed.length})</h2>
       <ul className="max-w-3xl">
-        {(posts ?? []).map((x) => (
-          <li key={x.id} className="border-t border-slate3 py-5">
-            <p className="text-sm text-slate5">{x.post_type === "audio" ? "podcast" : x.post_type} · {new Date(x.created_at).toLocaleDateString()}</p>
-            <Link href={x.post_type === "audio" ? `/podcast?ep=${x.id}` : `/articles/${x.id}`} dir="auto" className="mt-1 block text-3xl font-black leading-none tracking-tight hover:underline">{x.title}</Link>
+        {feed.map((item) => item.kind === "post" ? (
+          <li key={`post-${item.id}`} className="border-t border-slate3 py-5">
+            <p className="text-sm text-slate5">{item.post_type === "audio" ? "podcast" : item.post_type} · {new Date(item.created_at).toLocaleDateString()}</p>
+            <Link href={item.post_type === "audio" ? `/podcast?ep=${item.id}` : `/articles/${item.id}`} dir="auto" className="mt-1 block text-3xl font-black leading-none tracking-tight hover:underline">{item.title}</Link>
+          </li>
+        ) : (
+          <li key={`repost-${item.original.id}-${item.created_at}`} className="border-t border-slate3 py-5">
+            <p className="flex items-center gap-2 text-sm text-slate5"><Repeat2 size={16} /> Reposted · {new Date(item.created_at).toLocaleDateString()}</p>
+            {item.note && <p dir="auto" className="mt-2 text-lg">{item.note}</p>}
+            <div className="mt-2 border-l-2 border-slate3 pl-3">
+              <p className="text-sm text-slate5">by {item.original.author_name ?? "Student"}</p>
+              <Link href={item.original.post_type === "audio" ? `/podcast?ep=${item.original.id}` : `/articles/${item.original.id}`} dir="auto" className="mt-1 block text-xl font-black leading-tight tracking-tight hover:underline">{item.original.title}</Link>
+            </div>
           </li>
         ))}
       </ul>
-      {(posts ?? []).length === 0 && <p className="text-slate7">Nothing published yet.</p>}
+      {feed.length === 0 && <p className="text-slate7">Nothing here yet.</p>}
     </div>
   );
 }

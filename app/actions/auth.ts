@@ -21,6 +21,6 @@ export async function signUp(_: unknown, fd: FormData): Promise<AuthState> {
     options: { data: { full_name: String(fd.get("full_name") || "") } },
   });
   if (error) return { error: error.message };
-  if (!data.session) return { info: "Account created. Check your email to confirm it, then sign in. (Tip: you can also turn off \"Confirm email\" in Supabase → Auth → Providers → Email so accounts work instantly.)" };
+  if (!data.session) return { info: "Account created. Check your email for a confirmation link, then sign in." };
   redirect("/");
 }

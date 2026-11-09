@@ -1,8 +1,6 @@
 import Link from "next/link";
 import Hero from "@/components/Hero";
 import PostRow from "@/components/PostRow";
-import CrisprScanner from "@/components/CrisprScanner";
-import FermentationMonitor from "@/components/FermentationMonitor";
 import { getProfile } from "@/lib/supabase/server";
 import { mergeSettings, pick } from "@/lib/defaults";
 import type { Post } from "@/lib/types";
@@ -19,7 +17,7 @@ export default async function Home() {
     supabase.from("posts").select("id,title,metadata").eq("status", "published").eq("post_type", "audio").order("created_at", { ascending: false }).limit(1),
   ]);
   const s = mergeSettings((settingsRows ?? []) as never);
-  const hero = pick(s, "hero"), intro = pick(s, "intro"), lab = pick(s, "lab");
+  const hero = pick(s, "hero"), intro = pick(s, "intro");
   const list = (posts ?? []) as Post[];
   const ids = list.map((p) => p.id);
   const stats = (ids.length ? (await supabase.from("post_stats").select("*").in("post_id", ids)).data : []) as Stat[] | null;
@@ -82,13 +80,6 @@ export default async function Home() {
             <Link href="/create" className="mt-3 inline-block font-bold underline">Start writing</Link>
           </div>
         </aside>
-      </div>
-
-      <div className="surface-dark bleed bg-slate9 py-20 pr-6 text-paper">
-        <p className="mb-3 text-sm font-bold text-gold">Interactive demos with simulated data</p>
-        <h2 className="mb-3 text-3xl font-black tracking-tight md:text-5xl">{lab.title}</h2>
-        <p className="mb-10 max-w-2xl text-slate3">{lab.text}</p>
-        <div className="grid max-w-6xl gap-6 xl:grid-cols-2"><CrisprScanner /><FermentationMonitor /></div>
       </div>
     </>
   );

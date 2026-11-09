@@ -1,16 +1,18 @@
 "use client";
 import Link from "next/link";
 import { useEffect, useState, useTransition } from "react";
-import { Heart, MessageCircle, Share2 } from "lucide-react";
+import { Heart, MessageCircle, Repeat2, Share2, Bookmark } from "lucide-react";
 import { toggleLike, addComment } from "@/app/actions/posts";
 import { deleteComment } from "@/app/actions/moderation";
+import { repost, undoRepost } from "@/app/actions/reposts";
+import { toggleSave } from "@/app/actions/saves";
 import { createClient } from "@/lib/supabase/client";
 import ReportButton from "./ReportButton";
 
 interface Comment { id: string; user_id: string; content: string; created_at: string; parent_id?: string | null; profiles: { full_name: string | null } | null }
 
-export default function PostActions({ postId, likes, liked: likedInit, comments, defaultOpen = false, reportable = false }: {
-  postId: string; likes: number; liked: boolean; comments: number; defaultOpen?: boolean; reportable?: boolean;
+export default function PostActions({ postId, likes, liked: likedInit, comments, reposts = 0, reposted: repostedInit = false, repostNote: repostNoteInit = "", saved: savedInit = false, defaultOpen = false, reportable = false }: {
+  postId: string; likes: number; liked: boolean; comments: number; reposts?: number; reposted?: boolean; repostNote?: string; saved?: boolean; defaultOpen?: boolean; reportable?: boolean;
 }) {
   const [count, setCount] = useState(likes);
   const [liked, setLiked] = useState(likedInit);
@@ -22,6 +24,11 @@ export default function PostActions({ postId, likes, liked: likedInit, comments,
   const [msg, setMsg] = useState("");
   const [replyTo, setReplyTo] = useState<string | null>(null);
   const [replyText, setReplyText] = useState("");
+  const [repostCount, setRepostCount] = useState(reposts);
+  const [reposted, setReposted] = useState(repostedInit);
+  const [repostNote, setRepostNote] = useState(repostNoteInit);
+  const [composing, setComposing] = useState(false);
+  const [saved, setSaved] = useState(savedInit);
   const [, start] = useTransition();
 
   const load = async () => {
@@ -61,6 +68,23 @@ export default function PostActions({ postId, likes, liked: likedInit, comments,
     if (r.error) { setMsg(r.error); return; }
     setReplyText(""); setReplyTo(null); setMsg(""); setN(n + 1); await load();
   };
+  const doRepost = () => start(async () => {
+    const r = await repost(postId, repostNote);
+    if (r.error) { setMsg(r.error); return; }
+    if (!reposted) setRepostCount((c) => c + 1);
+    setReposted(true); setComposing(false); setMsg("");
+  });
+  const doUndo = () => start(async () => {
+    const r = await undoRepost(postId);
+    if (r.error) { setMsg(r.error); return; }
+    setReposted(false); setRepostCount((c) => Math.max(0, c - 1)); setRepostNote(""); setMsg("");
+  });
+  const toggleSaved = () => start(async () => {
+    const prev = saved;
+    setSaved(!prev);
+    const r = await toggleSave(postId);
+    if (r.error) { setSaved(prev); setMsg(r.error); return; }
+  });
   const remove = (id: string) => start(async () => {
     const r = await deleteComment(id);
     if (r.error) { setMsg(r.error); return; }
@@ -77,9 +101,25 @@ export default function PostActions({ postId, likes, liked: likedInit, comments,
           <Heart size={20} fill={liked ? "#D9A15F" : "none"} stroke={liked ? "#D9A15F" : "currentColor"} /> {count}
         </button>
         <button onClick={toggle} aria-expanded={open} className={b}><MessageCircle size={20} /> {n}</button>
+        <button onClick={() => (reposted ? doUndo() : setComposing(!composing))} aria-pressed={reposted} className={reposted ? "flex items-center gap-2 text-gold" : b}>
+          <Repeat2 size={20} /> {repostCount}
+        </button>
         <button onClick={share} className={`${b} ml-auto`}><Share2 size={20} /> Share</button>
+        <button onClick={toggleSaved} aria-pressed={saved} aria-label={saved ? "Remove from Library" : "Save to Library"} className={saved ? "text-gold" : b}>
+          <Bookmark size={20} fill={saved ? "currentColor" : "none"} />
+        </button>
         {reportable && <ReportButton targetType="post" targetId={postId} className="font-normal text-slate7 underline hover:text-slate9" />}
       </div>
+      {composing && !reposted && (
+        <div className="mt-3 border-2 border-slate9 p-3">
+          <textarea value={repostNote} onChange={(e) => setRepostNote(e.target.value)} rows={2} maxLength={280} dir="auto"
+            placeholder="Add a short note (optional)" className="w-full bg-transparent text-base outline-none" />
+          <div className="mt-2 flex gap-3">
+            <button onClick={doRepost} className="bg-slate9 px-4 py-2 text-sm font-bold text-paper hover:bg-gold hover:text-night">Repost</button>
+            <button onClick={() => setComposing(false)} className="text-sm underline">Cancel</button>
+          </div>
+        </div>
+      )}
       {msg && <p role="status" className="mt-2 text-sm text-slate7">{msg}</p>}
       {open && (
         <div className="mt-5">

@@ -29,8 +29,10 @@ export default async function ArticlePage({ params }: { params: { id: string } }
   const { data: post } = await supabase.from("posts").select("*, profiles(full_name, avatar_url)").eq("id", params.id).maybeSingle();
   if (!post) notFound();
   if (post.post_type === "audio") redirect(`/podcast?ep=${post.id}`);
-  const { data: stat } = await supabase.from("post_stats").select("like_count, comment_count").eq("post_id", post.id).maybeSingle();
+  const { data: stat } = await supabase.from("post_stats").select("like_count, comment_count, repost_count").eq("post_id", post.id).maybeSingle();
   const { data: mine } = user ? await supabase.from("likes").select("id").eq("post_id", post.id).eq("user_id", user.id).maybeSingle() : { data: null };
+  const { data: myRepost } = user ? await supabase.from("reposts").select("note").eq("post_id", post.id).eq("user_id", user.id).maybeSingle() : { data: null };
+  const { data: mySave } = user ? await supabase.from("saves").select("id").eq("post_id", post.id).eq("user_id", user.id).maybeSingle() : { data: null };
   return (
     <article className="max-w-[680px] pb-24 pr-6 pt-32">
       <Link href="/articles" className="text-sm text-slate7 underline">All articles</Link>
@@ -60,7 +62,8 @@ export default async function ArticlePage({ params }: { params: { id: string } }
         </p>
       )}
       <div className="mt-8 border-t border-slate3 pt-6">
-        <PostActions postId={post.id} likes={Number(stat?.like_count ?? 0)} comments={Number(stat?.comment_count ?? 0)} liked={!!mine} defaultOpen reportable />
+        <PostActions postId={post.id} likes={Number(stat?.like_count ?? 0)} comments={Number(stat?.comment_count ?? 0)}
+          reposts={Number(stat?.repost_count ?? 0)} reposted={!!myRepost} repostNote={myRepost?.note ?? ""} saved={!!mySave} liked={!!mine} defaultOpen reportable />
       </div>
       {post.status === "published" && user?.id === post.author_id && (
         <p className="mt-6"><DeletePostButton id={post.id} redirectTo="/my-posts" warnLive /></p>

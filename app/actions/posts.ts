@@ -3,6 +3,8 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { youtubeId } from "@/lib/youtube";
+import { suspensionError } from "@/lib/suspension";
+import { createAdminClient } from "@/lib/supabase/admin";
 
 function normTags(raw: string) {
   const seen = new Set<string>(); const out: string[] = [];
@@ -104,6 +106,8 @@ export async function toggleLike(postId: string) {
   const supabase = createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { error: "Sign in to like." };
+  const suspended = await suspensionError(supabase, user.id);
+  if (suspended) return { error: suspended };
   const { data: existing } = await supabase.from("likes").select("id").eq("post_id", postId).eq("user_id", user.id).maybeSingle();
   if (existing) await supabase.from("likes").delete().eq("id", existing.id);
   else await supabase.from("likes").insert({ post_id: postId, user_id: user.id });
@@ -114,6 +118,8 @@ export async function addComment(postId: string, content: string, parentId: stri
   const supabase = createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { error: "Sign in to comment." };
+  const suspended = await suspensionError(supabase, user.id);
+  if (suspended) return { error: suspended };
   const { error } = await supabase.from("comments").insert({ post_id: postId, user_id: user.id, content, parent_id: parentId || null });
   if (error) return { error: error.message };
   // Tell the post author (and, for a reply, the parent comment's author) that someone commented.
@@ -174,6 +180,60 @@ export async function setRole(userId: string, role: string) {
   const { error, data } = await supabase.from("profiles").update({ role }).eq("id", userId).select("id"); // RLS: admin only
   if (error) return { error: error.message };
   if (!data?.length) return { error: "Only admins can change roles." };
+  revalidatePath("/admin");
+  return { ok: true };
+}
+
+/** Suspends a student or editor until the given time, with a reason. Admins only (and never another admin, except the owner — enforced by RLS). */
+export async function suspendUser(userId: string, until: string, reason: string) {
+  const supabase = createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { error: "Sign in first." };
+  if (userId === user.id) return { error: "You cannot suspend your own account." };
+  const when = new Date(until);
+  if (isNaN(when.getTime()) || when <= new Date()) return { error: "Pick a time in the future." };
+  const text = reason.trim().slice(0, 500);
+  if (text.length < 3) return { error: "Write a short reason for the suspension." };
+  const { error, data } = await supabase.from("profiles").update({ suspended_until: when.toISOString(), suspension_reason: text }).eq("id", userId).select("id"); // RLS: admin only
+  if (error) return { error: error.message };
+  if (!data?.length) return { error: "Only admins can suspend an account." };
+  revalidatePath("/admin");
+  return { ok: true };
+}
+
+export async function unsuspendUser(userId: string) {
+  const supabase = createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { error: "Sign in first." };
+  const { error, data } = await supabase.from("profiles").update({ suspended_until: null, suspension_reason: null }).eq("id", userId).select("id"); // RLS: admin only
+  if (error) return { error: error.message };
+  if (!data?.length) return { error: "Only admins can lift a suspension." };
+  revalidatePath("/admin");
+  return { ok: true };
+}
+
+/**
+ * Permanently deletes an account: the auth user, their profile, and (by cascade) their posts,
+ * comments, likes, reposts and follows. There is no undo. Admins only; never your own account,
+ * and never another admin's unless you're the site owner (same rule as changing roles).
+ */
+export async function deleteAccount(userId: string) {
+  const supabase = createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { error: "Sign in first." };
+  if (userId === user.id) return { error: "You cannot delete your own account." };
+  const { data: me } = await supabase.from("profiles").select("role").eq("id", user.id).maybeSingle();
+  if (me?.role !== "admin") return { error: "Only admins can delete an account." };
+  const { data: target } = await supabase.from("profiles").select("role, created_at").eq("id", userId).maybeSingle();
+  if (!target) return { error: "That account could not be found." };
+  if (target.role === "admin") {
+    const { data: owner } = await supabase.from("profiles").select("id").eq("role", "admin").order("created_at", { ascending: true }).limit(1).maybeSingle();
+    if (owner?.id !== user.id) return { error: "Only the site owner can delete an admin account." };
+  }
+  let admin;
+  try { admin = createAdminClient(); } catch { return { error: "Account deletion isn't set up yet (missing SUPABASE_SERVICE_ROLE_KEY)." }; }
+  const { error } = await admin.auth.admin.deleteUser(userId);
+  if (error) return { error: error.message };
   revalidatePath("/admin");
   return { ok: true };
 }

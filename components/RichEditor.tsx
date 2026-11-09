@@ -50,7 +50,10 @@ export default function RichEditor({ initial, onChange, type }: { initial: strin
     content: initial,
     editorProps: { attributes: { class: "md reading min-h-[22rem] outline-none", "aria-label": "Your story", "aria-multiline": "true" } },
     onUpdate: ({ editor: ed }) => {
-      const md = ed.storage.markdown.getMarkdown() as string;
+      // tiptap-markdown sometimes backslash-escapes a plain space next to a bold/italic boundary
+      // (to protect it), but a space isn't a real markdown escape character, so the backslash
+      // shows up literally instead of disappearing when the article is rendered. Strip it here.
+      const md = (ed.storage.markdown.getMarkdown() as string).replace(/\\(?=[ \u00A0])/g, "");
       cb.current(md); setWords(countWords(md));
     },
   });

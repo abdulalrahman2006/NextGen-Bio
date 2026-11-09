@@ -10,7 +10,7 @@ export default function Login({ searchParams }: { searchParams: { next?: string 
   const field = "w-full border-b-2 border-slate9 bg-transparent py-3 text-lg outline-none focus:border-gold placeholder:text-slate5";
 
   return (
-    <div className="grid min-h-screen md:grid-cols-[minmax(0,5fr)_minmax(0,6fr)]">
+    <div id="login-split" className="grid min-h-screen md:-ml-64 md:w-[calc(100%+16rem)] md:grid-cols-[minmax(0,5fr)_minmax(0,6fr)]">
       <div className="surface-dark bg-paper px-6 py-10 text-slate9 md:flex md:flex-col md:justify-between md:px-14 md:py-16">
         <Link href="/" className="text-sm font-black tracking-tight">NextGen Bio</Link>
         <div className="my-10 md:my-0">

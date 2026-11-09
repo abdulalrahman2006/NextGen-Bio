@@ -1,9 +1,9 @@
 "use client";
-import { useRef, useState, useTransition } from "react";
-import { approvePost, deletePost, saveSetting, setRole, setTrusted } from "@/app/actions/posts";
+import { Fragment, useRef, useState, useTransition } from "react";
+import { approvePost, deletePost, saveSetting, setRole, setTrusted, suspendUser, unsuspendUser, deleteAccount } from "@/app/actions/posts";
 import { setFeedbackStatus, deleteFeedback } from "@/app/actions/feedback";
 import { setReportStatus, deleteComment, unpublishPost } from "@/app/actions/moderation";
-import { requestChanges } from "@/app/actions/review";
+import { requestChanges, flagPublished, clearFlag } from "@/app/actions/review";
 import { createClient } from "@/lib/supabase/client";
 import { youtubeId } from "@/lib/youtube";
 import Markdown from "@/components/Markdown";
@@ -107,10 +107,23 @@ function PostsTab({ posts }: { posts: AdminPost[] }) {
     setMsg(r.error ?? "Unpublished.");
   });
   const sendNote = () => start(async () => {
+    if (selState?.status === "published") {
+      const r = await flagPublished(sel!.id, note);
+      if (r.error) { setMsg(r.error); return; }
+      setLocal((l) => ({ ...l, [sel!.id]: { status: "published", note: note.trim() } }));
+      setAsking(false); setNote(""); setMsg("Flagged. The post stays live and the author has been told.");
+      return;
+    }
     const r = await requestChanges(sel!.id, note);
     if (r.error) { setMsg(r.error); return; }
     setLocal((l) => ({ ...l, [sel!.id]: { status: "draft", note: note.trim() } }));
     setAsking(false); setNote(""); setMsg("Sent back to the author with your note.");
+  });
+  const removeFlag = () => start(async () => {
+    const r = await clearFlag(sel!.id);
+    if (r.error) { setMsg(r.error); return; }
+    setLocal((l) => ({ ...l, [sel!.id]: { status: "published", note: null } }));
+    setMsg("Flag cleared.");
   });
   const remove = () => start(async () => {
     const r = await deletePost(sel!.id);
@@ -169,6 +182,12 @@ function PostsTab({ posts }: { posts: AdminPost[] }) {
             {selState?.status === "draft" && selState.note && (
               <p className="border-l-4 border-gold pl-3" dir="auto"><b>Waiting on the author.</b> Your note: {selState.note}</p>
             )}
+            {selState?.status === "published" && selState.note && (
+              <div className="border-l-4 border-gold pl-3">
+                <p dir="auto"><b>Flagged, still live.</b> {selState.note}</p>
+                <button disabled={pending} onClick={removeFlag} className="mt-2 text-sm font-bold underline">Clear flag</button>
+              </div>
+            )}
             <div className="border-t border-slate3 pt-3">
               <p className="text-sm text-slate7">{sel.profiles?.full_name ?? "—"} · {sel.post_type === "audio" ? "podcast" : sel.post_type} · {new Date(sel.created_at).toLocaleDateString()}</p>
               <h2 className="mt-2 text-2xl font-black tracking-tight" dir="auto">{sel.title}</h2>
@@ -181,16 +200,16 @@ function PostsTab({ posts }: { posts: AdminPost[] }) {
             )}
             <div className="flex flex-wrap items-center gap-3">
               {selState?.status !== "published" && <button disabled={pending} onClick={publish} className="bg-slate9 px-5 py-2 font-black text-paper hover:bg-gold hover:text-night">Publish</button>}
-              {selState?.status !== "draft" && <button disabled={pending} onClick={() => setAsking(!asking)} aria-expanded={asking} className="border-2 border-gold px-5 py-2 font-bold hover:bg-gold hover:text-night">Request changes</button>}
+              {selState?.status !== "draft" && <button disabled={pending} onClick={() => setAsking(!asking)} aria-expanded={asking} className="border-2 border-gold px-5 py-2 font-bold hover:bg-gold hover:text-night">{selState?.status === "published" ? "Flag an issue" : "Request changes"}</button>}
               {selState?.status === "published" && <button disabled={pending} onClick={unpublish} className="underline">Unpublish</button>}
               <span role="status" className="text-sm text-slate7">{msg}</span>
             </div>
             {asking && (
               <div className="border-2 border-gold p-4">
-                <label className="block font-bold">Note to the author (they will see it on My posts)
+                <label className="block font-bold">{selState?.status === "published" ? "What's wrong with it? (the post stays live; the author sees this note on My posts)" : "Note to the author (they will see it on My posts)"}
                   <textarea dir="auto" rows={4} value={note} onChange={(e) => setNote(e.target.value)} placeholder="For example: please add a source for the second claim and shorten the introduction." className={f} />
                 </label>
-                <button disabled={pending || note.trim().length < 3} onClick={sendNote} className="mt-3 bg-slate9 px-5 py-2 font-black text-paper hover:bg-gold hover:text-night disabled:opacity-50">Send back to the author</button>
+                <button disabled={pending || note.trim().length < 3} onClick={sendNote} className="mt-3 bg-slate9 px-5 py-2 font-black text-paper hover:bg-gold hover:text-night disabled:opacity-50">{selState?.status === "published" ? "Flag it" : "Send back to the author"}</button>
               </div>
             )}
             <div className="border-t-2 border-slate9 pt-4">
@@ -242,8 +261,15 @@ function UsersTab({ users, meId, isOwner }: { users: Profile[]; meId: string; is
   const [msg, setMsg] = useState("");
   const [roles, setRoles] = useState<Record<string, string>>({});
   const [trusted, setTrustedState] = useState<Record<string, boolean>>({});
+  const [suspended, setSuspended] = useState<Record<string, { until: string | null; reason: string | null } | undefined>>({});
+  const [openFor, setOpenFor] = useState<string | null>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
+  const [removedUsers, setRemovedUsers] = useState<Set<string>>(new Set());
+  const [days, setDays] = useState(7);
+  const [reason, setReason] = useState("");
   const [, start] = useTransition();
-  const filtered = users.filter((u) => (roleF === "all" || (roles[u.id] ?? u.role) === roleF) && (!q.trim() || (u.full_name ?? "").toLowerCase().includes(q.trim().toLowerCase())));
+  const stateOf = (u: Profile) => suspended[u.id] ?? { until: u.suspended_until ?? null, reason: u.suspension_reason ?? null };
+  const filtered = users.filter((u) => !removedUsers.has(u.id) && (roleF === "all" || (roles[u.id] ?? u.role) === roleF) && (!q.trim() || (u.full_name ?? "").toLowerCase().includes(q.trim().toLowerCase())));
   const pages = Math.max(1, Math.ceil(filtered.length / SIZE));
   const cur = Math.min(page, pages - 1);
   const shown = filtered.slice(cur * SIZE, cur * SIZE + SIZE);
@@ -262,34 +288,102 @@ function UsersTab({ users, meId, isOwner }: { users: Profile[]; meId: string; is
       <table className="w-full text-left">
         <thead><tr className="border-b-2 border-slate9"><th className="py-2">Name</th><th>Role</th></tr></thead>
         <tbody>
-          {shown.map((u) => (
-            <tr key={u.id} className="border-b border-slate3">
-              <td className="py-2 font-bold" dir="auto">{u.full_name ?? u.id.slice(0, 8)}{u.id === meId && <span className="ml-2 text-xs font-normal text-slate5">(you)</span>}</td>
-              <td>
-                <div className="flex flex-wrap items-center gap-3">
-                  <select value={roles[u.id] ?? u.role} disabled={u.id === meId || (u.role === "admin" && !isOwner)} aria-label={`Role for ${u.full_name}`} className="border-2 border-slate9 bg-transparent p-1 disabled:opacity-50"
-                    onChange={(e) => {
-                      const v = e.target.value;
-                      setRoles((r) => ({ ...r, [u.id]: v }));
-                      start(async () => { const r = await setRole(u.id, v); if (r.error) { setRoles((rr) => ({ ...rr, [u.id]: u.role })); setMsg(r.error); } else setMsg("Role updated."); });
-                    }}>
-                    {["student", "editor", "admin"].map((r) => <option key={r}>{r}</option>)}
-                  </select>
-                  {u.role === "student" && (
-                    <label className="flex items-center gap-1 text-sm">
-                      <input type="checkbox" checked={trusted[u.id] ?? !!u.trusted} disabled={u.id === meId} aria-label={`Trusted for ${u.full_name}`}
+          {shown.map((u) => {
+            const canSuspend = u.id !== meId && !(u.role === "admin" && !isOwner);
+            const st = stateOf(u);
+            const isSuspended = !!st.until && new Date(st.until) > new Date();
+            const open = openFor === u.id;
+            return (
+              <Fragment key={u.id}>
+                <tr className="border-b border-slate3">
+                  <td className="py-2 font-bold" dir="auto">
+                    {u.full_name ?? u.id.slice(0, 8)}{u.id === meId && <span className="ml-2 text-xs font-normal text-slate5">(you)</span>}
+                    {canSuspend && (
+                      <button className={`ml-3 text-xs font-bold underline ${isSuspended ? "text-danger" : "text-slate7"}`}
+                        onClick={() => { setOpenFor(open ? null : u.id); setReason(""); setDays(7); }}>
+                        {isSuspended ? "Suspended" : "Suspend"}
+                      </button>
+                    )}
+                    {canSuspend && (deleteConfirm === u.id ? (
+                      <span className="ml-3 inline-flex items-center gap-2 text-xs">
+                        <span>Delete for good?</span>
+                        <button className="font-bold text-danger underline" onClick={() => start(async () => {
+                          const r = await deleteAccount(u.id);
+                          if (r.error) { setMsg(r.error); return; }
+                          setRemovedUsers((s) => new Set(s).add(u.id)); setDeleteConfirm(null); setMsg("Account deleted.");
+                        })}>Yes, delete</button>
+                        <button className="underline" onClick={() => setDeleteConfirm(null)}>Cancel</button>
+                      </span>
+                    ) : (
+                      <button className="ml-3 text-xs font-bold text-danger underline" onClick={() => setDeleteConfirm(u.id)}>Delete account</button>
+                    ))}
+                  </td>
+                  <td>
+                    <div className="flex flex-wrap items-center gap-3">
+                      <select value={roles[u.id] ?? u.role} disabled={u.id === meId || (u.role === "admin" && !isOwner)} aria-label={`Role for ${u.full_name}`} className="border-2 border-slate9 bg-transparent p-1 disabled:opacity-50"
                         onChange={(e) => {
-                          const v = e.target.checked;
-                          setTrustedState((t) => ({ ...t, [u.id]: v }));
-                          start(async () => { const r = await setTrusted(u.id, v); if (r.error) { setTrustedState((t) => ({ ...t, [u.id]: !v })); setMsg(r.error); } else setMsg(v ? "Marked trusted. Their posts now publish immediately." : "Removed trusted. Their posts need review again."); });
-                        }} />
-                      Trusted
-                    </label>
-                  )}
-                </div>
-              </td>
-            </tr>
-          ))}
+                          const v = e.target.value;
+                          setRoles((r) => ({ ...r, [u.id]: v }));
+                          start(async () => { const r = await setRole(u.id, v); if (r.error) { setRoles((rr) => ({ ...rr, [u.id]: u.role })); setMsg(r.error); } else setMsg("Role updated."); });
+                        }}>
+                        {["student", "editor", "admin"].map((r) => <option key={r}>{r}</option>)}
+                      </select>
+                      {u.role === "student" && (
+                        <label className="flex items-center gap-1 text-sm">
+                          <input type="checkbox" checked={trusted[u.id] ?? !!u.trusted} disabled={u.id === meId} aria-label={`Trusted for ${u.full_name}`}
+                            onChange={(e) => {
+                              const v = e.target.checked;
+                              setTrustedState((t) => ({ ...t, [u.id]: v }));
+                              start(async () => { const r = await setTrusted(u.id, v); if (r.error) { setTrustedState((t) => ({ ...t, [u.id]: !v })); setMsg(r.error); } else setMsg(v ? "Marked trusted. Their posts now publish immediately." : "Removed trusted. Their posts need review again."); });
+                            }} />
+                          Trusted
+                        </label>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+                {open && (
+                  <tr className="border-b border-slate3 bg-slate3/20">
+                    <td colSpan={2} className="py-4">
+                      {isSuspended ? (
+                        <div className="space-y-2">
+                          <p className="font-bold text-danger">Suspended until {new Date(st.until!).toLocaleString()}</p>
+                          {st.reason && <p dir="auto"><b>Reason:</b> {st.reason}</p>}
+                          <button className="bg-slate9 px-4 py-2 text-sm font-bold text-paper hover:bg-gold hover:text-night" onClick={() => start(async () => {
+                            const r = await unsuspendUser(u.id);
+                            if (r.error) { setMsg(r.error); return; }
+                            setSuspended((s) => ({ ...s, [u.id]: { until: null, reason: null } })); setOpenFor(null); setMsg("Suspension lifted.");
+                          })}>Lift suspension</button>
+                        </div>
+                      ) : (
+                        <div className="max-w-md space-y-3">
+                          <div className="flex gap-2">
+                            {[1, 3, 7, 30].map((d) => (
+                              <button key={d} onClick={() => setDays(d)} className={`border-2 px-3 py-1 text-sm font-bold ${days === d ? "border-slate9 bg-slate9 text-paper" : "border-slate3"}`}>{d} day{d > 1 ? "s" : ""}</button>
+                            ))}
+                          </div>
+                          <label className="block text-sm font-bold">Reason (the student will see this)
+                            <textarea value={reason} onChange={(e) => setReason(e.target.value)} rows={2} dir="auto" className={f} placeholder="For example: repeated harassment in comments after a warning." />
+                          </label>
+                          <div className="flex gap-3">
+                            <button disabled={reason.trim().length < 3} onClick={() => {
+                              const until = new Date(Date.now() + days * 86400000).toISOString();
+                              start(async () => {
+                                const r = await suspendUser(u.id, until, reason);
+                                if (r.error) { setMsg(r.error); return; }
+                                setSuspended((s) => ({ ...s, [u.id]: { until, reason } })); setOpenFor(null); setMsg("Suspended.");
+                              });
+                            }} className="bg-danger px-4 py-2 text-sm font-bold text-paper disabled:opacity-50">Suspend for {days} day{days > 1 ? "s" : ""}</button>
+                            <button onClick={() => setOpenFor(null)} className="text-sm underline">Cancel</button>
+                          </div>
+                        </div>
+                      )}
+                    </td>
+                  </tr>
+                )}
+              </Fragment>
+            );
+          })}
         </tbody>
       </table>
       {shown.length === 0 && <p className="py-6 text-slate5">No one matches.</p>}

@@ -58,29 +58,22 @@ export default function ArticlesFeed({ initialTag }: { initialTag: string | null
   }, [loading, done, page, cat, load]);
 
   return (
-    <div className="max-w-6xl gap-16 pb-24 pr-6 pt-32 lg:grid lg:grid-cols-[1fr_320px]">
-      <section>
-        <h1 className="text-5xl font-black tracking-tight md:text-6xl">{cat ? <span className="capitalize">{cat}</span> : "Articles"}</h1>
-        {cat && <button onClick={() => setCat(null)} className="mt-2 text-slate7 underline">Show all articles</button>}
-        <div className="mt-6 border-t border-slate3">
-          {rows.map((r) => <PostRow key={r.post.id} {...r} />)}
-        </div>
-        {!loading && rows.length === 0 && <p className="mt-8 text-xl text-slate7">Nothing published here yet.</p>}
-        <div ref={sentinel} className="h-10 text-slate5">{loading ? "Loading…" : done && rows.length ? "You have reached the end." : ""}</div>
-      </section>
-      <aside className="mt-12 space-y-10 self-start lg:sticky lg:top-28 lg:mt-0">
-        <SearchBar tone="light" />
-        <div>
-          <h2 className="mb-3 font-black">Topics</h2>
-          <div className="flex flex-wrap gap-2">
-            {cats.map((c) => (
-              <button key={c} onClick={() => setCat(c)} aria-pressed={cat === c}
-                className={`px-3 py-1 text-sm capitalize ${cat === c ? "bg-slate9 text-paper" : "bg-slate3/50 hover:bg-slate3"}`}>{c}</button>
-            ))}
-            {cats.length === 0 && <p className="text-sm text-slate5">Topics appear when posts have tags.</p>}
-          </div>
-        </div>
-      </aside>
+    <div className="mx-auto max-w-3xl px-6 pb-24 pt-32">
+      <div className="mb-10 max-w-md"><SearchBar tone="light" /></div>
+      <h1 className="font-serif text-5xl font-normal tracking-tight md:text-6xl">{cat ? <span className="capitalize">{cat}</span> : "Articles"}</h1>
+      <div className="mt-6 flex flex-wrap gap-2">
+        <button onClick={() => setCat(null)} aria-pressed={!cat}
+          className={`rounded-full border px-4 py-1.5 text-sm font-bold ${!cat ? "border-slate9 bg-slate9 text-paper" : "border-slate3 hover:border-slate7"}`}>All</button>
+        {cats.map((c) => (
+          <button key={c} onClick={() => setCat(c)} aria-pressed={cat === c}
+            className={`rounded-full border px-4 py-1.5 text-sm font-bold capitalize ${cat === c ? "border-slate9 bg-slate9 text-paper" : "border-slate3 hover:border-slate7"}`}>{c}</button>
+        ))}
+      </div>
+      <div className="mt-10">
+        {rows.map((r) => <PostRow key={r.post.id} {...r} />)}
+      </div>
+      {!loading && rows.length === 0 && <p className="mt-8 text-xl text-slate7">Nothing published here yet.</p>}
+      <div ref={sentinel} className="h-10 text-slate5">{loading ? "Loading…" : done && rows.length ? "You have reached the end." : ""}</div>
     </div>
   );
 }

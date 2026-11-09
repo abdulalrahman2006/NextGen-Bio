@@ -2,6 +2,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { suspensionError } from "@/lib/suspension";
 
 export async function updateProfile(_: unknown, fd: FormData) {
   const supabase = createClient();
@@ -29,6 +30,8 @@ export async function toggleFollow(userId: string): Promise<{ error?: string; fo
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { error: "Sign in to follow." };
   if (userId === user.id) return { error: "You cannot follow yourself." };
+  const suspended = await suspensionError(supabase, user.id);
+  if (suspended) return { error: suspended };
   const { data: existing } = await supabase.from("follows").select("follower_id").eq("follower_id", user.id).eq("followee_id", userId).maybeSingle();
   if (existing) {
     const { error } = await supabase.from("follows").delete().eq("follower_id", user.id).eq("followee_id", userId);
