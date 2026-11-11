@@ -1,20 +1,21 @@
 "use client";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Home, Newspaper, Mic, Files, User, ShieldCheck, Bookmark, Users, type LucideIcon } from "lucide-react";
+import { Home, Newspaper, Mic, Files, User, ShieldCheck, Bookmark, Users, MessageCircle, type LucideIcon } from "lucide-react";
 
-export default function Sidebar({ signedIn, userId, staff }: { signedIn: boolean; userId: string | null; staff: boolean }) {
+export default function Sidebar({ signedIn, userId, username, staff, unreadMessages = 0 }: { signedIn: boolean; userId: string | null; username: string | null; staff: boolean; unreadMessages?: number }) {
   const path = usePathname();
   const items: [string, string, LucideIcon][] = [
     ["Home", "/", Home],
     ["Articles", "/articles", Newspaper],
     ["Podcast", "/podcast", Mic],
     ...(signedIn ? ([
+      // ["Messages", "/messages", MessageCircle], // re-enable once step22.sql (chat) is run
       ["Following", "/following", Users],
       ["Library", "/library", Bookmark],
       ["My posts", "/my-posts", Files],
     ] as [string, string, LucideIcon][]) : []),
-    ...(signedIn && userId ? ([["Profile", `/u/${userId}`, User]] as [string, string, LucideIcon][]) : []),
+    ...(signedIn && userId ? ([["Profile", `/u/${username ?? userId}`, User]] as [string, string, LucideIcon][]) : []),
     ...(staff ? ([["Admin", "/admin", ShieldCheck]] as [string, string, LucideIcon][]) : []),
   ];
   const isActive = (href: string) => href === "/" ? path === "/" : path === href || path.startsWith(href + "/");
@@ -25,6 +26,7 @@ export default function Sidebar({ signedIn, userId, staff }: { signedIn: boolean
         <Link key={href} href={href} aria-current={isActive(href) ? "page" : undefined}
           className={`flex items-center gap-3 px-3 py-2.5 text-[15px] font-semibold ${isActive(href) ? "bg-slate9 text-paper" : "text-slate9 hover:bg-slate3/50"}`}>
           <Icon size={19} /> {label}
+          {label === "Messages" && unreadMessages > 0 && <span className="ml-auto min-w-5 rounded-full bg-gold px-1.5 text-center text-xs font-bold text-night">{unreadMessages}</span>}
         </Link>
       ))}
     </nav>

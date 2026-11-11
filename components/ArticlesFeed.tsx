@@ -21,7 +21,7 @@ export default function ArticlesFeed({ initialTag }: { initialTag: string | null
     setLoading(true);
     const sb = createClient();
     const { data: { user } } = await sb.auth.getUser();
-    let q = sb.from("posts").select("*, profiles(full_name, avatar_url)").eq("status", "published").neq("post_type", "audio")
+    let q = sb.from("posts").select("*, profiles(username, full_name, avatar_url)").eq("status", "published").neq("post_type", "audio")
       .order("created_at", { ascending: false }).range(p * PAGE, p * PAGE + PAGE - 1);
     if (c) q = q.contains("tags", [c]);
     const { data: posts } = await q;

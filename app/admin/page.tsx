@@ -23,7 +23,7 @@ export default async function Admin() {
   const idsOf = (t: string) => [...new Set(rr.filter((r) => r.target_type === t).map((r) => r.target_id))];
   const pRows = idsOf("post").length ? (await supabase.from("posts").select("id,title,post_type,status,content").in("id", idsOf("post"))).data ?? [] : [];
   const cRows = idsOf("comment").length ? (await supabase.from("comments").select("id,content,post_id,profiles(full_name)").in("id", idsOf("comment"))).data ?? [] : [];
-  const uRows = idsOf("profile").length ? (await supabase.from("profiles").select("id,full_name").in("id", idsOf("profile"))).data ?? [] : [];
+  const uRows = idsOf("profile").length ? (await supabase.from("profiles").select("id,username,full_name").in("id", idsOf("profile"))).data ?? [] : [];
   const reports = rr.map((r) => {
     let target = { label: "Removed", preview: "This item no longer exists.", href: "", exists: false };
     let targetStatus: string | undefined;
@@ -35,7 +35,7 @@ export default async function Admin() {
       if (c) target = { label: `Comment by ${c.profiles?.full_name ?? "a student"}`, preview: c.content.slice(0, 300), href: `/articles/${c.post_id}`, exists: true };
     } else {
       const u = uRows.find((x) => x.id === r.target_id);
-      if (u) target = { label: `Profile: ${u.full_name ?? "Student"}`, preview: "", href: `/u/${u.id}`, exists: true };
+      if (u) target = { label: `Profile: ${u.full_name ?? "Student"}`, preview: "", href: `/u/${u.username ?? u.id}`, exists: true };
     }
     return { id: r.id, type: r.target_type, targetId: r.target_id, reason: r.reason, details: r.details, status: r.status, created_at: r.created_at, reporter: r.profiles?.full_name ?? "Unknown", target, targetStatus };
   });

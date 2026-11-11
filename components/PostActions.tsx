@@ -9,7 +9,7 @@ import { toggleSave } from "@/app/actions/saves";
 import { createClient } from "@/lib/supabase/client";
 import ReportButton from "./ReportButton";
 
-interface Comment { id: string; user_id: string; content: string; created_at: string; parent_id?: string | null; profiles: { full_name: string | null } | null }
+interface Comment { id: string; user_id: string; content: string; created_at: string; parent_id?: string | null; profiles: { username?: string; full_name: string | null } | null }
 
 export default function PostActions({ postId, likes, liked: likedInit, comments, reposts = 0, reposted: repostedInit = false, repostNote: repostNoteInit = "", saved: savedInit = false, defaultOpen = false, reportable = false }: {
   postId: string; likes: number; liked: boolean; comments: number; reposts?: number; reposted?: boolean; repostNote?: string; saved?: boolean; defaultOpen?: boolean; reportable?: boolean;
@@ -33,7 +33,7 @@ export default function PostActions({ postId, likes, liked: likedInit, comments,
 
   const load = async () => {
     const sb = createClient();
-    const { data } = await sb.from("comments").select("id, user_id, content, created_at, parent_id, profiles(full_name)").eq("post_id", postId).order("created_at");
+    const { data } = await sb.from("comments").select("id, user_id, content, created_at, parent_id, profiles(username, full_name)").eq("post_id", postId).order("created_at");
     setList((data as unknown as Comment[]) ?? []);
     const { data: { user } } = await sb.auth.getUser();
     if (user) {
@@ -126,7 +126,7 @@ export default function PostActions({ postId, likes, liked: likedInit, comments,
           <ul className="mb-4 space-y-4">
             {roots.map((c) => (
               <li key={c.id} className="border-l-2 border-gold pl-3 text-base">
-                <Link href={`/u/${c.user_id}`} className="font-bold hover:underline">{c.profiles?.full_name ?? "Student"}</Link>{" "}
+                <Link href={`/u/${c.profiles?.username ?? c.user_id}`} className="font-bold hover:underline">{c.profiles?.full_name ?? "Student"}</Link>{" "}
                 <span className="text-xs text-slate5">{new Date(c.created_at).toLocaleDateString()}</span>
                 <p dir="auto" className="whitespace-pre-wrap">{c.content}</p>
                 <span className="mt-1 flex gap-4 text-xs">
@@ -147,7 +147,7 @@ export default function PostActions({ postId, likes, liked: likedInit, comments,
                   <ul className="ml-4 mt-3 space-y-3 border-l-2 border-slate3 pl-3">
                     {repliesOf(c.id).map((r) => (
                       <li key={r.id}>
-                        <Link href={`/u/${r.user_id}`} className="font-bold hover:underline">{r.profiles?.full_name ?? "Student"}</Link>{" "}
+                        <Link href={`/u/${r.profiles?.username ?? r.user_id}`} className="font-bold hover:underline">{r.profiles?.full_name ?? "Student"}</Link>{" "}
                         <span className="text-xs text-slate5">{new Date(r.created_at).toLocaleDateString()}</span>
                         <p dir="auto" className="whitespace-pre-wrap">{r.content}</p>
                         <span className="mt-1 flex gap-4 text-xs">

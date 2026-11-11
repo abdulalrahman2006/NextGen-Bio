@@ -7,7 +7,7 @@ import { createClient } from "@/lib/supabase/server";
 export const revalidate = 0;
 
 type Hit = { id: string; title: string; category: string; content: string; post_type: string; created_at: string; metadata: Record<string, unknown>; profiles: { full_name: string | null } | null };
-type PersonHit = { id: string; full_name: string | null; headline: string | null; avatar_url: string | null };
+type PersonHit = { id: string; username: string; full_name: string | null; headline: string | null; avatar_url: string | null };
 
 function excerpt(raw: string, q: string) {
   const text = plain(raw, 100000);
@@ -30,7 +30,7 @@ export default async function SearchPage({ searchParams }: { searchParams: { q?:
     const [a, b, p] = await Promise.all([
       base().neq("post_type", "audio"),
       base().eq("post_type", "audio"),
-      sb.from("profiles").select("id,full_name,headline,avatar_url").or(peopleFilter).order("full_name").limit(12),
+      sb.from("profiles").select("id,username,full_name,headline,avatar_url").or(peopleFilter).order("full_name").limit(12),
     ]);
     written = (a.data ?? []) as unknown as Hit[]; audio = (b.data ?? []) as unknown as Hit[];
     people = (p.data ?? []) as unknown as PersonHit[];
@@ -55,7 +55,7 @@ export default async function SearchPage({ searchParams }: { searchParams: { q?:
           <h2 className="font-black text-2xl mb-2">People ({people.length})</h2>
           <ul className="grid gap-4 sm:grid-cols-2">
             {people.map((pr) => (
-              <li key={pr.id}><Link href={`/u/${pr.id}`} className="flex items-center gap-3 border-t border-slate3 py-4 hover:underline">
+              <li key={pr.id}><Link href={`/u/${pr.username}`} className="flex items-center gap-3 border-t border-slate3 py-4 hover:underline">
                 <Avatar url={pr.avatar_url} name={pr.full_name} size={44} />
                 <span><span dir="auto" className="block font-bold">{pr.full_name ?? "Unnamed"}</span>{pr.headline && <span dir="auto" className="block text-sm text-slate5">{pr.headline}</span>}</span>
               </Link></li>

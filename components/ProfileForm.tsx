@@ -46,6 +46,11 @@ export default function ProfileForm({ profile }: { profile: Profile }) {
       </div>
       <input type="hidden" name="avatar_url" value={avatar} />
       <label className="block font-bold">Name<input name="full_name" dir="auto" required maxLength={80} value={name} onChange={(e) => setName(e.target.value)} className={f} /></label>
+      <label className="block font-bold">Username
+        <input name="username" required maxLength={30} pattern="[a-z0-9]+(-[a-z0-9]+)*" defaultValue={profile.username ?? ""}
+          onChange={(e) => { e.target.value = e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ""); }} className={f} />
+      </label>
+      <p className="-mt-3 text-sm text-slate5">Your profile will be at nextgenbio.app/u/{profile.username || "your-username"}</p>
       <label className="block font-bold">Headline<input name="headline" dir="auto" maxLength={100} defaultValue={profile.headline ?? ""} placeholder="e.g. Second-year biotechnology student" className={f} /></label>
       <label className="block font-bold">About you<textarea name="bio" dir="auto" rows={5} maxLength={500} defaultValue={profile.bio ?? ""} placeholder="Interests, projects, what you like to write about" className={f} /></label>
       <label className="block font-bold">Website or link<input name="website" defaultValue={profile.website ?? ""} placeholder="https://" className={f} /></label>

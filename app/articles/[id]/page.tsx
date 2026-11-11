@@ -26,7 +26,7 @@ export async function generateMetadata({ params }: { params: { id: string } }): 
 
 export default async function ArticlePage({ params }: { params: { id: string } }) {
   const { supabase, user } = await getProfile();
-  const { data: post } = await supabase.from("posts").select("*, profiles(full_name, avatar_url)").eq("id", params.id).maybeSingle();
+  const { data: post } = await supabase.from("posts").select("*, profiles(username, full_name, avatar_url)").eq("id", params.id).maybeSingle();
   if (!post) notFound();
   if (post.post_type === "audio") redirect(`/podcast?ep=${post.id}`);
   const { data: stat } = await supabase.from("post_stats").select("like_count, comment_count, repost_count").eq("post_id", post.id).maybeSingle();
@@ -48,7 +48,7 @@ export default async function ArticlePage({ params }: { params: { id: string } }
         </p>
       )}
       <h1 dir="auto" className="mt-6 text-4xl font-black leading-[1.05] tracking-tight md:text-6xl">{post.title}</h1>
-      <Link href={`/u/${post.author_id}`} className="mt-8 flex items-center gap-3">
+      <Link href={`/u/${post.profiles?.username ?? post.author_id}`} className="mt-8 flex items-center gap-3">
         <Avatar url={post.profiles?.avatar_url} name={post.profiles?.full_name} size={48} />
         <span>
           <span className="block font-bold">{post.profiles?.full_name ?? "Anonymous"}</span>

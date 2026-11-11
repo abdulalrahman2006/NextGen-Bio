@@ -10,13 +10,16 @@ export default async function Navbar() {
     const { count } = await supabase.from("notifications").select("id", { count: "exact", head: true }).eq("user_id", user.id).is("read_at", null);
     unread = count ?? 0;
   }
+  // Messages re-enabled once step22.sql (chat) is run: bring back the unread-messages count
+  // query here and pass unreadMessages={...} to Sidebar below.
   const staff = !!profile && ["admin", "editor"].includes(profile.role);
   return (
     <>
-      <Sidebar signedIn={!!user} userId={user?.id ?? null} staff={staff} />
+      <Sidebar signedIn={!!user} userId={user?.id ?? null} username={profile?.username ?? null} staff={staff} />
       <TopBar
         signedIn={!!user}
         userId={user?.id ?? null}
+        username={profile?.username ?? null}
         staff={staff}
         unread={unread}
         avatarUrl={profile?.avatar_url ?? null}

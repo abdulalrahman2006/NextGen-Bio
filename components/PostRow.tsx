@@ -21,7 +21,7 @@ export default function PostRow({ post, likes, liked, comments }: { post: Post; 
           <p dir="auto" className="mt-3 max-w-[62ch] text-base leading-relaxed text-slate7">{plain(post.content, 180)}</p>
           <div className="mt-4 flex items-center gap-2 text-sm text-slate5">
             <Avatar url={post.profiles?.avatar_url} name={post.profiles?.full_name} size={22} />
-            <Link href={`/u/${post.author_id}`} className="font-bold text-slate7 hover:underline">{post.profiles?.full_name ?? "Anonymous"}</Link>
+            <Link href={`/u/${post.profiles?.username ?? post.author_id}`} className="font-bold text-slate7 hover:underline">{post.profiles?.full_name ?? "Anonymous"}</Link>
             <span>· {new Date(post.created_at).toLocaleDateString()}</span>
           </div>
         </div>

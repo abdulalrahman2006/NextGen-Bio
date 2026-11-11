@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { Repeat2 } from "lucide-react";
 import Avatar from "@/components/Avatar";
 import ReportButton from "@/components/ReportButton";
@@ -9,8 +9,21 @@ import { createClient, getProfile } from "@/lib/supabase/server";
 
 export const revalidate = 0;
 
-export async function generateMetadata({ params }: { params: { id: string } }): Promise<Metadata> {
-  const { data: p } = await createClient().from("profiles").select("full_name,headline,bio,avatar_url").eq("id", params.id).maybeSingle();
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** Looks up a profile by username; if that fails and the slug looks like a raw id (an old link), falls back to id and redirects to the real username URL. */
+async function resolveProfile(supabase: ReturnType<typeof createClient>, slug: string) {
+  const { data: byUsername } = await supabase.from("profiles").select("*").eq("username", slug).maybeSingle();
+  if (byUsername) return byUsername;
+  if (UUID.test(slug)) {
+    const { data: byId } = await supabase.from("profiles").select("*").eq("id", slug).maybeSingle();
+    if (byId) redirect(`/u/${byId.username}`);
+  }
+  return null;
+}
+
+export async function generateMetadata({ params }: { params: { username: string } }): Promise<Metadata> {
+  const p = await resolveProfile(createClient(), params.username);
   if (!p) return {};
   const name = p.full_name ?? "Student";
   const description = p.headline || (p.bio ? String(p.bio).slice(0, 160) : "A writer on NextGen Bio.");
@@ -18,18 +31,18 @@ export async function generateMetadata({ params }: { params: { id: string } }): 
   return { title: name, description, openGraph: { title: name, description, images: [image] }, twitter: { card: "summary", title: name, description, images: [image] } };
 }
 
-export default async function PublicProfile({ params }: { params: { id: string } }) {
+export default async function PublicProfile({ params }: { params: { username: string } }) {
   const { supabase, user } = await getProfile();
-  const { data: p } = await supabase.from("profiles").select("*").eq("id", params.id).maybeSingle();
+  const p = await resolveProfile(supabase, params.username);
   if (!p) notFound();
   const { data: posts } = await supabase.from("posts").select("id,title,post_type,created_at,tags")
-    .eq("author_id", params.id).eq("status", "published").order("created_at", { ascending: false });
+    .eq("author_id", p.id).eq("status", "published").order("created_at", { ascending: false });
   const [{ count: followers }, { count: following }, { data: myFollow }, { data: reposts }] = await Promise.all([
-    supabase.from("follows").select("follower_id", { count: "exact", head: true }).eq("followee_id", params.id),
-    supabase.from("follows").select("followee_id", { count: "exact", head: true }).eq("follower_id", params.id),
-    user ? supabase.from("follows").select("follower_id").eq("follower_id", user.id).eq("followee_id", params.id).maybeSingle() : Promise.resolve({ data: null }),
+    supabase.from("follows").select("follower_id", { count: "exact", head: true }).eq("followee_id", p.id),
+    supabase.from("follows").select("followee_id", { count: "exact", head: true }).eq("follower_id", p.id),
+    user ? supabase.from("follows").select("follower_id").eq("follower_id", user.id).eq("followee_id", p.id).maybeSingle() : Promise.resolve({ data: null }),
     supabase.from("reposts").select("id,note,created_at,posts!inner(id,title,post_type,status,author_id,profiles(full_name))")
-      .eq("user_id", params.id).eq("posts.status", "published").order("created_at", { ascending: false }),
+      .eq("user_id", p.id).eq("posts.status", "published").order("created_at", { ascending: false }),
   ]);
   const me = user?.id === p.id;
   type FeedItem =
@@ -53,6 +66,7 @@ export default async function PublicProfile({ params }: { params: { id: string }
           <p className="mt-2 text-sm text-slate7">{followers ?? 0} followers · {following ?? 0} following</p>
           <div className="mt-3 flex flex-wrap items-center gap-4">
             {user && !me && <FollowButton userId={p.id} initialFollowing={!!myFollow} initialCount={followers ?? 0} />}
+            {user && !me && <Link href={`/messages/${p.id}`} className="underline hover:text-slate7">Message</Link>}
             {!me && <ReportButton targetType="profile" targetId={p.id} label="Report this profile" />}
           </div>
         </div>

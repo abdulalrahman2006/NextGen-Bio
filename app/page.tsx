@@ -12,7 +12,7 @@ export default async function Home() {
   const { supabase, user } = await getProfile();
   const [{ data: settingsRows }, { data: posts }, { data: tagRows }, { data: episodes }] = await Promise.all([
     supabase.from("site_settings").select("id, section_name, content_json"),
-    supabase.from("posts").select("*, profiles(full_name, avatar_url)").eq("status", "published").neq("post_type", "audio").order("created_at", { ascending: false }).limit(6),
+    supabase.from("posts").select("*, profiles(username, full_name, avatar_url)").eq("status", "published").neq("post_type", "audio").order("created_at", { ascending: false }).limit(6),
     supabase.from("posts").select("tags").eq("status", "published").neq("post_type", "audio"),
     supabase.from("posts").select("id,title,metadata").eq("status", "published").eq("post_type", "audio").order("created_at", { ascending: false }).limit(1),
   ]);

@@ -9,11 +9,11 @@ import ThemeToggle from "./ThemeToggle";
 import SidebarToggle from "./SidebarToggle";
 
 type Props = {
-  signedIn: boolean; userId: string | null; staff: boolean; unread: number;
+  signedIn: boolean; userId: string | null; username: string | null; staff: boolean; unread: number;
   avatarUrl: string | null; fullName: string | null; signOutAction: () => Promise<void>;
 };
 
-export default function TopBar({ signedIn, userId, staff, unread, avatarUrl, fullName, signOutAction }: Props) {
+export default function TopBar({ signedIn, userId, username, staff, unread, avatarUrl, fullName, signOutAction }: Props) {
   const path = usePathname();
   const [menu, setMenu] = useState(false);
   const [account, setAccount] = useState(false);
@@ -26,7 +26,8 @@ export default function TopBar({ signedIn, userId, staff, unread, avatarUrl, ful
 
   const sections: [string, string][] = [["Home", "/"], ["Articles", "/articles"], ["Podcast", "/podcast"], ["Search", "/search"], ["About", "/about"]];
   const mine: [string, string][] = signedIn && userId
-    ? [["Profile", `/u/${userId}`], ["Following", "/following"], ["Library", "/library"], ["My posts", "/my-posts"], ["Edit profile", "/settings"], ["Feedback", "/feedback"], ...(staff ? ([["Admin", "/admin"]] as [string, string][]) : [])]
+    ? [["Profile", `/u/${username ?? userId}`], ["Following", "/following"], ["Library", "/library"], ["My posts", "/my-posts"], ["Edit profile", "/settings"], ["Feedback", "/feedback"], ...(staff ? ([["Admin", "/admin"]] as [string, string][]) : [])]
+    // Messages re-enabled once step22.sql (chat) is run: add ["Messages", "/messages"] back above.
     : [];
   const dot = unread > 0 ? <span aria-hidden className="absolute right-0 top-0 h-2 w-2 rounded-full bg-gold" /> : null;
 
